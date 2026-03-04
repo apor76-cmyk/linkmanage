@@ -294,8 +294,24 @@ function renderLinks(){
   box.appendChild(card);
  });
 
- if(linkSortable)linkSortable.destroy();
- linkSortable=new Sortable(box,{animation:200,ghostClass:"sortable-ghost"});
+if(linkSortable)linkSortable.destroy();
+
+linkSortable=new Sortable(box,{
+  animation:200,
+  ghostClass:"sortable-ghost",
+  onEnd:()=>{
+    const cards=[...box.children];
+    const newOrder=[];
+    cards.forEach(card=>{
+      const title=card.querySelector(".link-title").textContent;
+      const item=data[currentCategory].find(i=>i.title===title);
+      if(item)newOrder.push(item);
+    });
+    data[currentCategory]=newOrder;
+    saveLocal();
+    renderLinks();
+  }
+});
 }
 
 function addLink(){
