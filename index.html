@@ -18,7 +18,6 @@
  --hover:#1d4ed8;
  --star:#f59e0b;
 }
-
 .dark{
  --bg:#0f172a;
  --card:#1e293b;
@@ -28,14 +27,12 @@
  --accent:#3b82f6;
  --hover:#60a5fa;
 }
-
 body{
  margin:0;
  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto;
  background:var(--bg);
  color:var(--text);
 }
-
 header{
  padding:16px;
  background:var(--card);
@@ -44,7 +41,6 @@ header{
  gap:10px;
  flex-wrap:wrap;
 }
-
 button{
  padding:6px 12px;
  border-radius:12px;
@@ -54,19 +50,16 @@ button{
  cursor:pointer;
  font-size:13px;
 }
-
 .primary{
  background:var(--accent);
  color:#fff;
  border:none;
 }
-
 .container{
  max-width:1400px;
  margin:auto;
  padding:30px 20px;
 }
-
 .card{
  background:var(--card);
  padding:20px;
@@ -74,55 +67,37 @@ button{
  border:1px solid var(--border);
  margin-bottom:25px;
 }
-
 .category-bar{
  display:flex;
  flex-wrap:wrap;
  gap:12px;
 }
-
-.category-item{
- display:flex;
- align-items:center;
- gap:6px;
-}
-
 .category-btn{
  padding:8px 16px;
  border-radius:999px;
- cursor:grab;
+ cursor:pointer;
 }
-
 .category-btn.active{
  background:var(--accent);
  color:white;
  border:none;
 }
 
-/* 🔥 반응형 Grid */
+/* 반응형 */
 .link-list{
  display:grid;
  gap:16px;
  margin-top:10px;
- grid-template-columns:repeat(3,1fr); /* 모바일 3개 */
+ grid-template-columns:repeat(3,1fr);
 }
-
-/* 태블릿 4개 */
 @media (min-width:768px){
- .link-list{
-   grid-template-columns:repeat(4,1fr);
- }
+ .link-list{ grid-template-columns:repeat(4,1fr); }
 }
-
-/* PC 6개 */
 @media (min-width:1200px){
- .link-list{
-   grid-template-columns:repeat(6,1fr);
- }
+ .link-list{ grid-template-columns:repeat(6,1fr); }
 }
 
 .link-card{
- width:100%;
  background:var(--card);
  border:1px solid var(--border);
  border-radius:18px;
@@ -132,43 +107,31 @@ button{
  cursor:grab;
  transition:.25s;
 }
-
 .link-card:hover{
  transform:translateY(-6px);
  box-shadow:0 10px 25px rgba(0,0,0,0.1);
 }
-
 .thumb{
  width:100%;
  aspect-ratio:16/9;
  object-fit:cover;
 }
-
 .link-body{
  padding:12px;
  display:flex;
  flex-direction:column;
  gap:6px;
 }
-
 .link-title{
  font-size:13px;
  font-weight:600;
 }
-
 .star{
  cursor:pointer;
  font-size:18px;
  color:var(--sub);
 }
-
-.star.active{
- color:var(--star);
-}
-
-.favorite{
- order:-1;
-}
+.star.active{ color:var(--star); }
 
 .manage-actions{
  display:flex;
@@ -229,7 +192,6 @@ const GITHUB={
 let data={};
 let currentCategory=null;
 let manageMode=false;
-let categorySortable;
 let linkSortable;
 
 function toggleDark(){document.body.classList.toggle("dark")}
@@ -244,12 +206,12 @@ function getYoutubeId(url){
  return match?match[1]:null;
 }
 
+/* ---------- 카테고리 ---------- */
 function renderCategories(){
  const bar=document.getElementById("categoryBar");
  bar.innerHTML="";
  Object.keys(data).forEach(cat=>{
    const wrap=document.createElement("div");
-   wrap.className="category-item";
 
    const btn=document.createElement("button");
    btn.textContent=cat;
@@ -271,43 +233,40 @@ function renderCategories(){
          renderCategories();
        }
      };
-
      const del=document.createElement("button");
      del.textContent="🗑";
      del.onclick=()=>{
        if(confirm("카테고리 삭제?")){
          delete data[cat];
-         if(currentCategory===cat) currentCategory=null;
+         currentCategory=null;
          saveLocal();
          renderCategories();
          renderLinks();
        }
      };
-
      wrap.appendChild(edit);
      wrap.appendChild(del);
    }
 
    bar.appendChild(wrap);
  });
-
- if(categorySortable) categorySortable.destroy();
- categorySortable=new Sortable(bar,{
-   animation:200,
-   ghostClass:"sortable-ghost"
- });
 }
 
+/* ---------- 링크 ---------- */
 function renderLinks(){
  const box=document.getElementById("linkList");
  box.innerHTML="";
  if(!currentCategory) return;
 
+ // ⭐ 항상 favorite 상단 고정
+ data[currentCategory].sort((a,b)=>
+   (b.favorite===true)-(a.favorite===true)
+ );
+
  data[currentCategory].forEach((item,i)=>{
    const id=getYoutubeId(item.url);
    const card=document.createElement("div");
    card.className="link-card";
-   card.dataset.index=i;
 
    card.innerHTML=`
      <img class="thumb" src="https://img.youtube.com/vi/${id}/mqdefault.jpg">
@@ -319,8 +278,7 @@ function renderLinks(){
 
    card.querySelector(".thumb").onclick=()=>window.open(item.url,"_blank");
 
-   const star=card.querySelector(".star");
-   star.onclick=(e)=>{
+   card.querySelector(".star").onclick=(e)=>{
      e.stopPropagation();
      item.favorite=!item.favorite;
      saveLocal();
@@ -336,12 +294,7 @@ function renderLinks(){
      edit.onclick=()=>{
        const t=prompt("제목",item.title);
        const u=prompt("URL",item.url);
-       if(t&&u){
-         item.title=t;
-         item.url=u;
-         saveLocal();
-         renderLinks();
-       }
+       if(t&&u){ item.title=t; item.url=u; saveLocal(); renderLinks(); }
      };
 
      const del=document.createElement("button");
@@ -361,24 +314,29 @@ function renderLinks(){
  });
 
  if(linkSortable) linkSortable.destroy();
+
  linkSortable=new Sortable(box,{
    animation:200,
    ghostClass:"sortable-ghost",
    onEnd:(evt)=>{
-     const moved=data[currentCategory].splice(evt.oldIndex,1)[0];
-     data[currentCategory].splice(evt.newIndex,0,moved);
+     const items=[...box.children];
+     const favCount=data[currentCategory].filter(v=>v.favorite).length;
+     const newOrder=[];
+     items.forEach((el,index)=>{
+       const title=el.querySelector(".link-title").textContent;
+       const found=data[currentCategory].find(v=>v.title===title);
+       found.favorite = index < favCount;
+       newOrder.push(found);
+     });
+     data[currentCategory]=newOrder;
      saveLocal();
      renderLinks();
    }
  });
 }
 
-function toggleManage(){
- manageMode=!manageMode;
- renderCategories();
- renderLinks();
-}
-
+/* ---------- 기타 ---------- */
+function toggleManage(){ manageMode=!manageMode; renderCategories(); renderLinks(); }
 function addCategory(){
  const name=prompt("카테고리 이름");
  if(name && !data[name]){
@@ -388,11 +346,10 @@ function addCategory(){
    renderCategories();
  }
 }
-
 function addLink(){
  if(!currentCategory) return alert("카테고리 선택");
- const t=document.getElementById("titleInput").value;
- const u=document.getElementById("urlInput").value;
+ const t=titleInput.value;
+ const u=urlInput.value;
  if(t&&u){
    data[currentCategory].push({title:t,url:u,favorite:false});
    saveLocal();
@@ -402,6 +359,7 @@ function addLink(){
  }
 }
 
+/* ---------- GitHub ---------- */
 function getToken(){
  let token=localStorage.getItem("ghToken");
  if(!token){
@@ -410,15 +368,10 @@ function getToken(){
  }
  return token;
 }
-
-function resetToken(){
- localStorage.removeItem("ghToken");
- alert("토큰 초기화 완료");
-}
+function resetToken(){ localStorage.removeItem("ghToken"); alert("토큰 초기화 완료"); }
 
 async function syncToGit(){
- const token=getToken();
- if(!token) return;
+ const token=getToken(); if(!token) return;
  const url=`https://api.github.com/repos/${GITHUB.user}/${GITHUB.repo}/contents/${GITHUB.path}`;
  let sha=null;
  const res=await fetch(url,{headers:{Authorization:`token ${token}`}});
@@ -436,8 +389,7 @@ async function syncToGit(){
 }
 
 async function syncFromGit(){
- const token=getToken();
- if(!token) return;
+ const token=getToken(); if(!token) return;
  const url=`https://api.github.com/repos/${GITHUB.user}/${GITHUB.repo}/contents/${GITHUB.path}`;
  const res=await fetch(url,{headers:{Authorization:`token ${token}`}});
  if(!res.ok) return alert("파일 없음");
