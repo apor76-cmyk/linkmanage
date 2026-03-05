@@ -236,7 +236,8 @@ textarea{width:100%}
 const GITHUB={
 user:"apor76-cmyk",
 repo:"data",
-path:"linkmanage1.json"
+dataPath:"linkmanage1.json",
+uploadPath:"uploads/"
 }
 
 let data={Home:[]}
@@ -285,6 +286,44 @@ saveLocal()
 renderCategories()
 renderLinks()
 }
+
+}
+
+async function uploadFileToGitHub(file){
+
+const token=getToken()
+if(!token)return null
+
+const reader=new FileReader()
+
+return new Promise(resolve=>{
+
+reader.onload=async e=>{
+
+const base64=e.target.result.split(",")[1]
+const fileName=Date.now()+"_"+file.name
+
+const url=`https://api.github.com/repos/${GITHUB.user}/${GITHUB.repo}/contents/${GITHUB.uploadPath}${fileName}`
+
+await fetch(url,{
+method:"PUT",
+headers:{
+Authorization:`Bearer ${token}`,
+"Content-Type":"application/json"
+},
+body:JSON.stringify({
+message:"upload file",
+content:base64
+})
+})
+
+resolve(`https://raw.githubusercontent.com/${GITHUB.user}/${GITHUB.repo}/main/${GITHUB.uploadPath}${fileName}`)
+
+}
+
+reader.readAsDataURL(file)
+
+})
 
 }
 
@@ -401,7 +440,7 @@ thumb=`<div class="thumb">🌐</div>`
 else if(item.type==="file"){
 
 if(item.fileName && item.fileName.match(/\.(jpg|png|jpeg|gif)$/i))
-thumb=`<div class="thumb"><img src="${item.fileData}"></div>`
+thumb=`<div class="thumb"><img src="${item.url}"></div>`
 else
 thumb=`<div class="thumb">📁</div>`
 
@@ -427,7 +466,7 @@ window.open(item.url)
 if(item.type==="file"){
 
 const a=document.createElement("a")
-a.href=item.fileData
+a.href=item.url
 a.download=item.fileName || "file"
 a.click()
 
@@ -501,6 +540,7 @@ favorite:false
 
 }
 
+
 else if(type==="file"){
 
 const file=fileInput.files[0]
@@ -510,16 +550,13 @@ alert("파일 선택")
 return
 }
 
-const reader=new FileReader()
-
-reader.onload=e=>{
+uploadFileToGitHub(file).then(url=>{
 
 data[currentCategory].push({
 id:Date.now(),
 title,
-fileData:e.target.result,
+url:url,
 fileName:file.name,
-fileType:file.type,
 type:"file",
 favorite:false
 })
@@ -527,11 +564,9 @@ favorite:false
 saveLocal()
 renderLinks()
 
-}
+})
 
-reader.readAsDataURL(file)
 return
-
 }
 
 titleInput.value=""
