@@ -455,6 +455,15 @@ ${thumb}
 <div class="link-body">
 <div class="link-title">${item.title}</div>
 <div><span class="star ${item.favorite?'active':''}">★</span></div>
+
+${manageMode ? `
+<div class="manage-actions">
+<button onclick="editLink(${item.id});event.stopPropagation()">✏</button>
+<button onclick="deleteLink(${item.id});event.stopPropagation()">🗑</button>
+</div>
+` : ""}
+
+
 </div>
 `
 
@@ -674,9 +683,35 @@ if(t)localStorage.setItem("ghToken",t)
 }
 
 return t
-
 }
 
+function deleteLink(id){
+  if(!confirm("삭제할까요?")) return
+  data[currentCategory] = data[currentCategory].filter(i=>i.id!==id)
+  saveLocal()
+  renderLinks()
+}
+
+function editLink(id){
+  const item=data[currentCategory].find(i=>i.id===id)
+  if(!item) return
+
+  const newTitle=prompt("제목 수정",item.title)
+  if(newTitle) item.title=newTitle
+
+  if(item.type==="youtube"||item.type==="link"){
+    const newUrl=prompt("URL 수정",item.url)
+    if(newUrl) item.url=newUrl
+  }
+
+  if(item.type==="text"){
+    const newText=prompt("텍스트 수정",item.text)
+    if(newText) item.text=newText
+  }
+
+  saveLocal()
+  renderLinks()
+}
 async function syncToGit(){
 
 const token=getToken()
