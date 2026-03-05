@@ -682,7 +682,7 @@ async function syncToGit(){
 const token=getToken()
 if(!token)return
 
-const url=`https://api.github.com/repos/${GITHUB.user}/${GITHUB.repo}/contents/${GITHUB.path}`
+const url=`https://api.github.com/repos/${GITHUB.user}/${GITHUB.repo}/contents/${GITHUB.dataPath}`
 
 let sha=null
 
@@ -715,7 +715,7 @@ async function syncFromGit(){
 const token=getToken()
 if(!token)return
 
-const url=`https://api.github.com/repos/${GITHUB.user}/${GITHUB.repo}/contents/${GITHUB.path}`
+const url=`https://api.github.com/repos/${GITHUB.user}/${GITHUB.repo}/contents/${GITHUB.dataPath}`
 
 const r=await fetch(url,{headers:{Authorization:`Bearer ${token}`}})
 
