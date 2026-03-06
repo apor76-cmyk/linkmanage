@@ -3,22 +3,18 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Link Manager - Stable</title>
+<title>Link Manager with Photo Modal</title>
 <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.2/Sortable.min.js"></script>
 <style>
 :root{
  --bg:#f6f7fb; --card:#fff; --text:#111827; --sub:#6b7280;
  --border:#e5e7eb; --accent:#2563eb; --star:#f59e0b;
 }
-.dark{ 
-  --bg:#0f172a; --card:#1e293b; --text:#f1f5f9; --sub:#94a3b8; 
-  --border:#334155; --accent:#3b82f6; --star:#f59e0b; 
-  --button-text:#fff;
-}
+.dark{ --bg:#0f172a; --card:#1e293b; --text:#f1f5f9; --sub:#94a3b8; --border:#334155; --accent:#3b82f6; }
 body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto;background:var(--bg);color:var(--text);}
 header{padding:14px;background:var(--card);border-bottom:1px solid var(--border);display:flex;gap:8px;flex-wrap:wrap;}
-button{padding:6px 12px;border-radius:12px;border:1px solid var(--border);background:var(--card);cursor:pointer;font-size:13px;color:var(--text);}
-.dark button{color:var(--button-text);}
+header button{padding:6px 12px;border-radius:12px;border:1px solid var(--border);background:var(--card);cursor:pointer;font-size:13px;}
+.dark header button:not(.primary){color:white;} /* 다크모드 버튼 글자 흰색 */
 .primary{background:var(--accent);color:white;border:none;}
 .container{max-width:1400px;margin:auto;padding:20px;}
 .card{background:var(--card);padding:20px;border-radius:20px;border:1px solid var(--border);margin-bottom:20px;}
@@ -93,11 +89,11 @@ function toggleUI(){
   const header=document.getElementById("topHeader");
   const input=document.getElementById("inputCard");
   if(uiHidden){
-    header.style.display="none"; input.style.display="none"; 
+    header.style.display="none"; input.style.display="none";
     if(linkSortable) linkSortable.option("disabled",true);
     const btn=document.createElement("button"); btn.id="restoreBtn"; btn.textContent="기능보기"; btn.style.position="fixed"; btn.style.top="20px"; btn.style.right="20px"; btn.style.zIndex="9999"; btn.onclick=toggleUI; document.body.appendChild(btn);
   } else {
-    header.style.display="flex"; input.style.display="block"; 
+    header.style.display="flex"; input.style.display="block";
     if(linkSortable) linkSortable.option("disabled",false);
     const btn=document.getElementById("restoreBtn"); if(btn) btn.remove();
   }
@@ -131,20 +127,21 @@ function renderLinks(){
   let list=[...data[currentCategory]];
   const search=document.getElementById("searchInput").value.toLowerCase();
   list=list.filter(i=>i.title.toLowerCase().includes(search));
-  list.sort((a,b)=>a.favorite&&!b.favorite?-1:!a.favorite&&b.favorite?1:0); // 즐겨찾기 상단
+  // 즐겨찾기 상단 정렬
+  list.sort((a,b)=>a.favorite&&!b.favorite?-1:!a.favorite&&b.favorite?1:0);
 
   list.forEach(item=>{
     const card=document.createElement("div"); card.className="link-card"; card.dataset.id=item.id;
     let thumb="";
     if(item.type==="youtube"){const id=getYoutubeId(item.url); thumb=`<div class="thumb"><img src="https://img.youtube.com/vi/${id}/mqdefault.jpg"></div>`;}
     else if(item.type==="link"){thumb=`<div class="thumb">🌐</div>`;}
-    else if(item.type==="photo"){thumb=`<div class="thumb"><img src="${item.url||item.preview}"></div>`;}
+    else if(item.type==="photo"){thumb=`<div class="thumb"><img src="${item.preview}"></div>`;}
     else if(item.type==="text"){thumb=`<div class="thumb">📝</div>`;}
     card.innerHTML=`${thumb}<div class="link-body"><div class="link-title">${item.title}</div><div><span class="star ${item.favorite?'active':''}">★</span></div></div>`;
 
     card.onclick=()=>{ 
       if(item.type==="youtube"||item.type==="link") window.open(item.url);
-      if(item.type==="photo" && (item.url||item.preview)){document.getElementById("modalImg").src=item.url||item.preview; document.getElementById("photoModal").style.display="flex";}
+      if(item.type==="photo" && item.preview){document.getElementById("modalImg").src=item.preview; document.getElementById("photoModal").style.display="flex";}
       if(item.type==="text") alert(item.text);
     };
     card.querySelector(".star").onclick=e=>{ e.stopPropagation(); item.favorite=!item.favorite; saveLocal(); renderLinks(); };
@@ -164,51 +161,28 @@ function renderLinks(){
   linkSortable=new Sortable(box,{animation:200,ghostClass:"sortable-ghost",disabled:uiHidden});
 }
 
-function uploadFileToGitHub(file){
-  const token=getToken(); if(!token) return Promise.resolve(null);
-  return new Promise(resolve=>{
-    const reader=new FileReader();
-    reader.onload=e=>{
-      const base64=e.target.result.split(",")[1];
-      const fileName=Date.now()+"_"+file.name;
-      const url=`https://api.github.com/repos/${GITHUB.user}/${GITHUB.repo}/contents/${GITHUB.uploadPath}${fileName}`;
-      fetch(url,{
-        method:"PUT",
-        headers:{Authorization:`Bearer ${token}`,"Content-Type":"application/json"},
-        body:JSON.stringify({message:"upload photo", content:base64})
-      }).then(res=>res.json()).then(json=>{
-        if(json.content && json.content.path){const branch="main"; const rawUrl=`https://raw.githubusercontent.com/${GITHUB.user}/${GITHUB.repo}/${branch}/${json.content.path}`; resolve(rawUrl);}
-        else resolve(null);
-      }).catch(()=>resolve(null));
-    };
-    reader.readAsDataURL(file);
-  });
-}
-
 function addLink(){
   if(!currentCategory) return alert("카테고리 선택");
   const type=typeSelect.value, title=titleInput.value; 
   if(!title) return alert("제목");
 
-  if(type==="youtube"||type==="link"){data[currentCategory].push({id:Date.now(),title,url:urlInput.value,type,favorite:false}); saveLocal(); renderLinks();}
-  else if(type==="text"){data[currentCategory].push({id:Date.now(),title,text:textInput.value,type,favorite:false}); saveLocal(); renderLinks();}
+  if(type==="youtube"||type==="link"){data[currentCategory].push({id:Date.now(),title,url:urlInput.value,type,favorite:false});}
+  else if(type==="text"){data[currentCategory].push({id:Date.now(),title,text:textInput.value,type,favorite:false});}
   else if(type==="photo"){
     const files=[...fileInput.files]; if(files.length===0){alert("사진 선택"); return;}
     files.forEach(file=>{
-      const tempId=Date.now()+Math.random();
       const reader=new FileReader();
       reader.onload=e=>{
         const preview=e.target.result;
-        const idx=data[currentCategory].push({id:tempId,title,type,preview,favorite:false,url:null})-1;
-        uploadFileToGitHub(file).then(url=>{
-          if(url){data[currentCategory][idx].url=url; saveLocal(); renderLinks();}
-        });
+        data[currentCategory].push({id:Date.now(),title,type,preview,favorite:false});
+        saveLocal(); renderLinks();
       };
       reader.readAsDataURL(file);
     });
   }
 
   titleInput.value=""; urlInput.value=""; textInput.value=""; fileInput.value="";
+  saveLocal(); renderLinks();
 }
 
 function toggleManage(){manageMode=!manageMode; renderCategories(); renderLinks();}
