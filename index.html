@@ -3,17 +3,22 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Link Manager with GitHub Photo Upload</title>
+<title>Link Manager - Stable</title>
 <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.2/Sortable.min.js"></script>
 <style>
 :root{
  --bg:#f6f7fb; --card:#fff; --text:#111827; --sub:#6b7280;
  --border:#e5e7eb; --accent:#2563eb; --star:#f59e0b;
 }
-.dark{ --bg:#0f172a; --card:#1e293b; --text:#f1f5f9; --sub:#94a3b8; --border:#334155; --accent:#3b82f6; }
+.dark{ 
+  --bg:#0f172a; --card:#1e293b; --text:#f1f5f9; --sub:#94a3b8; 
+  --border:#334155; --accent:#3b82f6; --star:#f59e0b; 
+  --button-text:#fff;
+}
 body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto;background:var(--bg);color:var(--text);}
 header{padding:14px;background:var(--card);border-bottom:1px solid var(--border);display:flex;gap:8px;flex-wrap:wrap;}
-button{padding:6px 12px;border-radius:12px;border:1px solid var(--border);background:var(--card);cursor:pointer;font-size:13px;}
+button{padding:6px 12px;border-radius:12px;border:1px solid var(--border);background:var(--card);cursor:pointer;font-size:13px;color:var(--text);}
+.dark button{color:var(--button-text);}
 .primary{background:var(--accent);color:white;border:none;}
 .container{max-width:1400px;margin:auto;padding:20px;}
 .card{background:var(--card);padding:20px;border-radius:20px;border:1px solid var(--border);margin-bottom:20px;}
@@ -35,7 +40,6 @@ button{padding:6px 12px;border-radius:12px;border:1px solid var(--border);backgr
 .sortable-ghost{opacity:.4;}
 input,select,textarea{padding:8px 12px;border-radius:10px;border:1px solid var(--border);}
 textarea{width:100%;}
-/* 사진 모달 */
 #photoModal{display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.8);justify-content:center;align-items:center;z-index:9999;}
 #photoModal img{max-width:90%;max-height:90%;border-radius:12px;}
 </style>
@@ -73,7 +77,6 @@ textarea{width:100%;}
 <div class="card"><div id="linkList" class="link-list"></div></div>
 </div>
 
-<!-- 사진 모달 -->
 <div id="photoModal" onclick="this.style.display='none'">
   <img id="modalImg" src="">
 </div>
@@ -89,8 +92,15 @@ function toggleUI(){
   uiHidden=!uiHidden;
   const header=document.getElementById("topHeader");
   const input=document.getElementById("inputCard");
-  if(uiHidden){header.style.display="none"; input.style.display="none"; const btn=document.createElement("button"); btn.id="restoreBtn"; btn.textContent="기능보기"; btn.style.position="fixed"; btn.style.top="20px"; btn.style.right="20px"; btn.style.zIndex="9999"; btn.onclick=toggleUI; document.body.appendChild(btn);}
-  else{header.style.display="flex"; input.style.display="block"; const btn=document.getElementById("restoreBtn"); if(btn) btn.remove();}
+  if(uiHidden){
+    header.style.display="none"; input.style.display="none"; 
+    if(linkSortable) linkSortable.option("disabled",true);
+    const btn=document.createElement("button"); btn.id="restoreBtn"; btn.textContent="기능보기"; btn.style.position="fixed"; btn.style.top="20px"; btn.style.right="20px"; btn.style.zIndex="9999"; btn.onclick=toggleUI; document.body.appendChild(btn);
+  } else {
+    header.style.display="flex"; input.style.display="block"; 
+    if(linkSortable) linkSortable.option("disabled",false);
+    const btn=document.getElementById("restoreBtn"); if(btn) btn.remove();
+  }
 }
 function getYoutubeId(url){if(url.includes("youtu.be/")) return url.split("youtu.be/")[1].split("?")[0]; if(url.includes("v=")) return url.split("v=")[1].split("&")[0]; return "";}
 
@@ -121,7 +131,7 @@ function renderLinks(){
   let list=[...data[currentCategory]];
   const search=document.getElementById("searchInput").value.toLowerCase();
   list=list.filter(i=>i.title.toLowerCase().includes(search));
-  list.sort((a,b)=>a.favorite&&!b.favorite?-1:!a.favorite&&b.favorite?1:0);
+  list.sort((a,b)=>a.favorite&&!b.favorite?-1:!a.favorite&&b.favorite?1:0); // 즐겨찾기 상단
 
   list.forEach(item=>{
     const card=document.createElement("div"); card.className="link-card"; card.dataset.id=item.id;
@@ -151,15 +161,13 @@ function renderLinks(){
   });
 
   if(linkSortable) linkSortable.destroy();
-  linkSortable=new Sortable(box,{animation:200,ghostClass:"sortable-ghost"});
+  linkSortable=new Sortable(box,{animation:200,ghostClass:"sortable-ghost",disabled:uiHidden});
 }
 
-// GitHub 업로드 함수
 function uploadFileToGitHub(file){
-  const token = getToken();
-  if(!token) return Promise.resolve(null);
+  const token=getToken(); if(!token) return Promise.resolve(null);
   return new Promise(resolve=>{
-    const reader = new FileReader();
+    const reader=new FileReader();
     reader.onload=e=>{
       const base64=e.target.result.split(",")[1];
       const fileName=Date.now()+"_"+file.name;
@@ -168,14 +176,9 @@ function uploadFileToGitHub(file){
         method:"PUT",
         headers:{Authorization:`Bearer ${token}`,"Content-Type":"application/json"},
         body:JSON.stringify({message:"upload photo", content:base64})
-      })
-      .then(res=>res.json())
-      .then(json=>{
-        if(json.content && json.content.path){
-          const branch="main";
-          const rawUrl=`https://raw.githubusercontent.com/${GITHUB.user}/${GITHUB.repo}/${branch}/${json.content.path}`;
-          resolve(rawUrl);
-        } else resolve(null);
+      }).then(res=>res.json()).then(json=>{
+        if(json.content && json.content.path){const branch="main"; const rawUrl=`https://raw.githubusercontent.com/${GITHUB.user}/${GITHUB.repo}/${branch}/${json.content.path}`; resolve(rawUrl);}
+        else resolve(null);
       }).catch(()=>resolve(null));
     };
     reader.readAsDataURL(file);
