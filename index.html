@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Link Manager Ultimate v14</title>
+<title>Link Manager Ultimate v16</title>
 
 <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.2/Sortable.min.js"></script>
 
@@ -108,14 +108,14 @@ display:flex;
 flex-direction:column;
 position:relative;
 transition: transform 0.2s;
-height:240px; /* 카드 높이 고정 */
+height:240px;
 }
 
-.link-card.favorite{order:-1;} /* 즐겨찾기 상단 유지 */
+.link-card.favorite{order:-1;}
 
 .thumb{
 width:100%;
-height:120px; /* 썸네일 높이 고정 */
+height:120px;
 display:flex;
 align-items:center;
 justify-content:center;
@@ -190,7 +190,7 @@ max-width:700px;
 width:90%;
 max-height:80%;
 overflow:auto;
-white-space: pre-wrap; /* 텍스트 원문 줄바꿈 유지 */
+white-space: pre-wrap;
 }
 </style>
 </head>
@@ -198,7 +198,6 @@ white-space: pre-wrap; /* 텍스트 원문 줄바꿈 유지 */
 <body>
 
 <header id="topbar">
-
 <button class="primary" onclick="addCategory()">+카테고리</button>
 <button onclick="toggleManage()">관리모드</button>
 <button onclick="toggleHide()">숨김모드</button>
@@ -207,31 +206,23 @@ white-space: pre-wrap; /* 텍스트 원문 줄바꿈 유지 */
 <button onclick="restoreBackup()">복원</button>
 <button onclick="syncFromGit()">⬇동기화</button>
 <button onclick="syncToGit()">⬆업로드</button>
-
 <input id="searchInput" placeholder="검색" oninput="renderLinks()">
-
 </header>
 
 <div class="container">
 
 <div class="card" id="inputBox">
-
 <select id="type">
 <option value="youtube">유튜브</option>
 <option value="link">링크</option>
 <option value="photo">사진</option>
 <option value="text">텍스트</option>
 </select>
-
 <input id="title" placeholder="제목">
 <input id="url" placeholder="URL">
-
 <input type="file" id="file" accept="image/*">
-
 <textarea id="text" rows="6" placeholder="텍스트 입력"></textarea>
-
 <button class="primary" onclick="addLink()">저장</button>
-
 </div>
 
 <div class="card">
@@ -280,7 +271,7 @@ const btn=document.getElementById("restoreBtn"); if(btn) btn.remove()
 bar.style.display="none"; input.style.display="none"
 const btn=document.createElement("button")
 btn.id="restoreBtn"; btn.innerText="기능보기"
-btn.style.position="fixed"; btn.style.top="20px"; btn.style.right="20px"
+btn.style.position = "fixed"; btn.style.top = "20px"; btn.style.right = "20px"
 btn.onclick=toggleHide
 document.body.appendChild(btn)
 }
@@ -359,7 +350,20 @@ ${thumb}
 </div>`
 card.onclick=()=>{
 if(item.type==="link"||item.type==="youtube") window.open(item.url,"_blank")
-if(item.type==="text"){document.getElementById("textTitle").innerText=item.title; document.getElementById("textBody").innerText=item.text; document.getElementById("textModal").style.display="flex"}
+if(item.type==="text"){
+const textModal=document.getElementById("textModal")
+document.getElementById("textTitle").innerText=item.title
+document.getElementById("textBody").innerText=item.text
+// 다크모드에 따라 배경/글자색 적용
+if(document.body.classList.contains("dark")){
+textModal.querySelector(".modalBox").style.background="#1e293b"
+textModal.querySelector(".modalBox").style.color="#f1f5f9"
+}else{
+textModal.querySelector(".modalBox").style.background="#fff"
+textModal.querySelector(".modalBox").style.color="#111"
+}
+textModal.style.display="flex"
+}
 }
 card.querySelector(".star").onclick=e=>{e.stopPropagation(); item.favorite=!item.favorite; save(); renderLinks()}
 if(manageMode){
@@ -367,59 +371,23 @@ const actions=document.createElement("div"); actions.className="manage-actions"
 const edit=document.createElement("button"); edit.textContent="✏"; edit.onclick=e=>{
 e.stopPropagation()
 const t=prompt("제목",item.title); if(t) item.title=t
-if(item.type==="link"||item.type==="youtube"){const u=prompt("URL",item.url); if(u) 
-item.url=u}
-
+if(item.type==="link"||item.type==="youtube"){const u=prompt("URL",item.url); if(u) item.url=u}
 if(item.type==="text"){
-    // 텍스트 카드 수정 모드 → textarea 모달 사용
-    const modal = document.createElement("div");
-    modal.style.position = "fixed";
-    modal.style.top = "0";
-    modal.style.left = "0";
-    modal.style.width = "100%";
-    modal.style.height = "100%";
-    modal.style.background = "rgba(0,0,0,0.8)";
-    modal.style.display = "flex";
-    modal.style.justifyContent = "center";
-    modal.style.alignItems = "center";
-    modal.style.zIndex = "9999";
-
-    const box = document.createElement("div");
-    box.style.background = "#fff";
-    box.style.padding = "20px";
-    box.style.borderRadius = "16px";
-    box.style.width = "80%";
-    box.style.maxWidth = "600px";
-    box.style.display = "flex";
-    box.style.flexDirection = "column";
-
-    const ta = document.createElement("textarea");
-    ta.style.width = "100%";
-    ta.style.height = "200px"; // 높이 고정
-    ta.style.resize = "vertical"; // 세로로만 조절 가능
-    ta.value = item.text || "";
-    box.appendChild(ta);
-
-    const saveBtn = document.createElement("button");
-    saveBtn.textContent = "저장";
-    saveBtn.className = "primary";
-    saveBtn.style.marginTop = "10px";
-    saveBtn.onclick = () => {
-        item.text = ta.value;
-        save();
-        renderLinks();
-        document.body.removeChild(modal);
-    };
-    box.appendChild(saveBtn);
-
-    modal.appendChild(box);
-    document.body.appendChild(modal);
+    const modal=document.createElement("div")
+    modal.style.position="fixed"; modal.style.top="0"; modal.style.left="0"; modal.style.width="100%"; modal.style.height="100%"
+    modal.style.background="rgba(0,0,0,0.8)"; modal.style.display="flex"; modal.style.justifyContent="center"; modal.style.alignItems="center"; modal.style.zIndex="9999"
+    const box=document.createElement("div")
+    if(document.body.classList.contains("dark")){box.style.background="#1e293b"; box.style.color="#f1f5f9"}
+    else{box.style.background="#fff"; box.style.color="#111"}
+    box.style.padding="20px"; box.style.borderRadius="16px"; box.style.width="80%"; box.style.maxWidth="600px"; box.style.display="flex"; box.style.flexDirection="column"
+    const ta=document.createElement("textarea"); ta.style.width="100%"; ta.style.height="200px"; ta.style.resize="vertical"; ta.style.background="inherit"; ta.style.color="inherit"; ta.value=item.text||""; box.appendChild(ta)
+    const saveBtn=document.createElement("button"); saveBtn.textContent="저장"; saveBtn.className="primary"; saveBtn.style.marginTop="10px"
+    saveBtn.onclick=()=>{item.text=ta.value; save(); renderLinks(); document.body.removeChild(modal)}
+    box.appendChild(saveBtn); modal.appendChild(box); document.body.appendChild(modal)
 }
 save(); renderLinks()
 }
-const del=document.createElement("button"); del.textContent="🗑"; del.onclick=e=>{
-e.stopPropagation(); if(confirm("삭제?")){data[currentCategory]=data[currentCategory].filter(d=>d.id!==item.id); save(); renderLinks()}
-}
+const del=document.createElement("button"); del.textContent="🗑"; del.onclick=e=>{e.stopPropagation(); if(confirm("삭제?")){data[currentCategory]=data[currentCategory].filter(d=>d.id!==item.id); save(); renderLinks()}}
 actions.appendChild(edit); actions.appendChild(del); card.appendChild(actions)
 }
 if(item.favorite) favBox.appendChild(card)
@@ -446,39 +414,24 @@ document.getElementById("title").value=""; document.getElementById("url").value=
 }
 
 function toggleManage(){manageMode=!manageMode; renderCategories(); renderLinks()}
-
 function downloadBackup(){const blob=new Blob([JSON.stringify(data,null,2)],{type:"application/json"}); const a=document.createElement("a"); a.href=URL.createObjectURL(blob); a.download="linkmanager_backup.json"; a.click()}
 function restoreBackup(){const input=document.createElement("input"); input.type="file"; input.onchange=e=>{const reader=new FileReader(); reader.onload=x=>{data=JSON.parse(x.target.result); save(); renderCategories(); renderLinks()}; reader.readAsText(e.target.files[0])}; input.click()}
-
 function getToken(){let t=localStorage.getItem("ghToken"); if(!t){t=prompt("GitHub Token"); if(t) localStorage.setItem("ghToken",t)}; return t}
-
-async function syncToGit(){
-const token=getToken(); if(!token) return
+async function syncToGit(){const token=getToken(); if(!token) return
 const url=`https://api.github.com/repos/${GITHUB.user}/${GITHUB.repo}/contents/${GITHUB.dataPath}`
 let sha=null
 const r=await fetch(url,{headers:{Authorization:`Bearer ${token}`}})
 if(r.ok){const f=await r.json(); sha=f.sha}
-await fetch(url,{
-method:"PUT",
-headers:{Authorization:`Bearer ${token}`,"Content-Type":"application/json"},
-body:JSON.stringify({
-message:"update data",
-content:btoa(unescape(encodeURIComponent(JSON.stringify(data,null,2)))),
-sha
-})
-})
-alert("업로드 완료")
-}
+await fetch(url,{method:"PUT",headers:{Authorization:`Bearer ${token}`,"Content-Type":"application/json"},body:JSON.stringify({message:"update data",content:btoa(unescape(encodeURIComponent(JSON.stringify(data,null,2)))),sha})})
+alert("업로드 완료")}
 
-async function syncFromGit(){
-const token=getToken(); if(!token) return
+async function syncFromGit(){const token=getToken(); if(!token) return
 const url=`https://api.github.com/repos/${GITHUB.user}/${GITHUB.repo}/contents/${GITHUB.dataPath}`
 const r=await fetch(url,{headers:{Authorization:`Bearer ${token}`}})
 if(!r.ok) return alert("파일 없음")
 const f=await r.json()
 data=JSON.parse(decodeURIComponent(escape(atob(f.content))))
-save(); renderCategories(); renderLinks(); alert("동기화 완료")
-}
+save(); renderCategories(); renderLinks(); alert("동기화 완료")}
 
 load(); renderCategories(); renderLinks()
 </script>
