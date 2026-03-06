@@ -3,10 +3,8 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Link Manager Ultimate Optimized (Fixed File URLs)</title>
-
+<title>Link Manager with GitHub Photo Upload</title>
 <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.2/Sortable.min.js"></script>
-
 <style>
 :root{
  --bg:#f6f7fb; --card:#fff; --text:#111827; --sub:#6b7280;
@@ -16,9 +14,8 @@
 body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto;background:var(--bg);color:var(--text);}
 header{padding:14px;background:var(--card);border-bottom:1px solid var(--border);display:flex;gap:8px;flex-wrap:wrap;}
 button{padding:6px 12px;border-radius:12px;border:1px solid var(--border);background:var(--card);cursor:pointer;font-size:13px;}
-.dark button{color:white;}
 .primary{background:var(--accent);color:white;border:none;}
-.container{max-width:1400px;margin:auto;padding:30px 20px;}
+.container{max-width:1400px;margin:auto;padding:20px;}
 .card{background:var(--card);padding:20px;border-radius:20px;border:1px solid var(--border);margin-bottom:20px;}
 .category-bar{display:flex;gap:10px;flex-wrap:wrap;}
 .category-btn{padding:8px 16px;border-radius:999px;}
@@ -36,9 +33,11 @@ button{padding:6px 12px;border-radius:12px;border:1px solid var(--border);backgr
 .star.active{color:var(--star);}
 .manage-actions{display:flex;gap:6px;margin-top:6px;}
 .sortable-ghost{opacity:.4;}
-.progress-bar{position:absolute;bottom:0;left:0;height:4px;background:var(--accent);transition:width .2s;}
 input,select,textarea{padding:8px 12px;border-radius:10px;border:1px solid var(--border);}
 textarea{width:100%;}
+/* 사진 모달 */
+#photoModal{display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.8);justify-content:center;align-items:center;z-index:9999;}
+#photoModal img{max-width:90%;max-height:90%;border-radius:12px;}
 </style>
 </head>
 <body>
@@ -48,7 +47,6 @@ textarea{width:100%;}
 <button onclick="toggleManage()">관리모드</button>
 <button onclick="toggleUI()">기능숨김</button>
 <button onclick="toggleDark()">다크모드</button>
-<button onclick="showGallery()">사진갤러리</button>
 <button onclick="downloadBackup()">백업</button>
 <button onclick="restoreBackup()">복원</button>
 <button onclick="syncFromGit()">⬇동기화</button>
@@ -61,12 +59,12 @@ textarea{width:100%;}
 <select id="typeSelect">
 <option value="youtube">유튜브</option>
 <option value="link">링크</option>
-<option value="file">파일</option>
+<option value="photo">사진</option>
 <option value="text">텍스트</option>
 </select>
 <input id="titleInput" placeholder="제목">
-<input id="urlInput" placeholder="URL">
-<input type="file" id="fileInput" multiple>
+<input id="urlInput" placeholder="URL (유튜브/링크만)">
+<input type="file" id="fileInput" accept="image/*" multiple>
 <textarea id="textInput" placeholder="텍스트"></textarea>
 <button class="primary" onclick="addLink()">저장</button>
 </div>
@@ -75,48 +73,36 @@ textarea{width:100%;}
 <div class="card"><div id="linkList" class="link-list"></div></div>
 </div>
 
-<script>
-const GITHUB={user:"apor76-cmyk",repo:"data",dataPath:"linkmanage1.json",uploadPath:"uploads/"};
-let data={Home:[]},currentCategory="Home",manageMode=false,linkSortable,uiHidden=false,galleryMode=false;
+<!-- 사진 모달 -->
+<div id="photoModal" onclick="this.style.display='none'">
+  <img id="modalImg" src="">
+</div>
 
-function saveLocal(){localStorage.setItem("ytData",JSON.stringify(data));}
-function loadLocal(){const s=localStorage.getItem("ytData"); if(s){data=JSON.parse(s); currentCategory=Object.keys(data)[0];}}
+<script>
+const GITHUB={user:"apor76-cmyk",repo:"data",dataPath:"linkmanager.json",uploadPath:"uploads/"};
+let data={Home:[]},currentCategory="Home",manageMode=false,linkSortable,uiHidden=false;
+
+function saveLocal(){localStorage.setItem("lmData",JSON.stringify(data));}
+function loadLocal(){const s=localStorage.getItem("lmData"); if(s){data=JSON.parse(s); currentCategory=Object.keys(data)[0];}}
 function toggleDark(){document.body.classList.toggle("dark");}
+function toggleUI(){
+  uiHidden=!uiHidden;
+  const header=document.getElementById("topHeader");
+  const input=document.getElementById("inputCard");
+  if(uiHidden){header.style.display="none"; input.style.display="none"; const btn=document.createElement("button"); btn.id="restoreBtn"; btn.textContent="기능보기"; btn.style.position="fixed"; btn.style.top="20px"; btn.style.right="20px"; btn.style.zIndex="9999"; btn.onclick=toggleUI; document.body.appendChild(btn);}
+  else{header.style.display="flex"; input.style.display="block"; const btn=document.getElementById("restoreBtn"); if(btn) btn.remove();}
+}
 function getYoutubeId(url){if(url.includes("youtu.be/")) return url.split("youtu.be/")[1].split("?")[0]; if(url.includes("v=")) return url.split("v=")[1].split("&")[0]; return "";}
 
 function addCategory(){const name=prompt("카테고리 이름"); if(!name) return; if(!data[name]){data[name]=[]; currentCategory=name; saveLocal(); renderCategories(); renderLinks();}}
 
-// GitHub 파일 업로드 with progress & download_url
-function uploadFileToGitHub(file, onProgress){
-  const token=getToken(); if(!token) return Promise.resolve(null);
-  const reader=new FileReader();
-  return new Promise(resolve=>{
-    reader.onload=e=>{
-      const base64=e.target.result.split(",")[1];
-      const fileName=Date.now()+"_"+file.name;
-      const url=`https://api.github.com/repos/${GITHUB.user}/${GITHUB.repo}/contents/${GITHUB.uploadPath}${fileName}`;
-      fetch(url,{
-        method:"PUT",
-        headers:{Authorization:`Bearer ${token}`, "Content-Type":"application/json"},
-        body:JSON.stringify({message:"upload file", content:base64})
-      })
-      .then(res=>res.json())
-      .then(json=>resolve(json.content.download_url)) // ✅ download_url 사용
-      .catch(()=>resolve(null));
-    };
-    reader.onprogress=e=>{ if(e.lengthComputable && onProgress) onProgress(e.loaded/e.total*100); };
-    reader.readAsDataURL(file);
-  });
-}
-
-// 관리모드 / 카드 렌더링
 function renderCategories(){
   const bar=document.getElementById("categoryBar"); bar.innerHTML="";
   Object.keys(data).forEach(cat=>{
     const wrap=document.createElement("div");
     const btn=document.createElement("button"); btn.textContent=cat; btn.className="category-btn";
     if(cat===currentCategory) btn.classList.add("active");
-    btn.onclick=()=>{currentCategory=cat; galleryMode=false; renderCategories(); renderLinks();};
+    btn.onclick=()=>{currentCategory=cat; renderCategories(); renderLinks();};
     wrap.appendChild(btn);
     if(manageMode){
       const edit=document.createElement("button"); edit.textContent="✏";
@@ -133,24 +119,26 @@ function renderLinks(){
   const box=document.getElementById("linkList"); box.innerHTML="";
   if(!currentCategory) return;
   let list=[...data[currentCategory]];
-  list.sort((a,b)=>{if(a.favorite&&!b.favorite) return -1; if(!a.favorite&&b.favorite) return 1; return 0;});
   const search=document.getElementById("searchInput").value.toLowerCase();
   list=list.filter(i=>i.title.toLowerCase().includes(search));
-  if(galleryMode) list=list.filter(i=>i.type==="file" && i.fileName && i.fileName.match(/\.(jpg|png|jpeg|gif)$/i));
+  list.sort((a,b)=>a.favorite&&!b.favorite?-1:!a.favorite&&b.favorite?1:0);
+
   list.forEach(item=>{
     const card=document.createElement("div"); card.className="link-card"; card.dataset.id=item.id;
     let thumb="";
     if(item.type==="youtube"){const id=getYoutubeId(item.url); thumb=`<div class="thumb"><img src="https://img.youtube.com/vi/${id}/mqdefault.jpg"></div>`;}
     else if(item.type==="link"){thumb=`<div class="thumb">🌐</div>`;}
-    else if(item.type==="file"){thumb=`<div class="thumb">${item.url?.match(/\.(mp4|mov)$/i)?'<video src="'+item.url+'" muted></video>':'<img src="'+item.url+'">'} </div>`;}
+    else if(item.type==="photo"){thumb=`<div class="thumb"><img src="${item.url||item.preview}"></div>`;}
     else if(item.type==="text"){thumb=`<div class="thumb">📝</div>`;}
-    card.innerHTML=`${thumb}<div class="link-body"><div class="link-title">${item.title}</div><div><span class="star ${item.favorite?'active':''}">★</span></div></div><div class="progress-bar" style="width:0%"></div>`;
+    card.innerHTML=`${thumb}<div class="link-body"><div class="link-title">${item.title}</div><div><span class="star ${item.favorite?'active':''}">★</span></div></div>`;
+
     card.onclick=()=>{ 
       if(item.type==="youtube"||item.type==="link") window.open(item.url);
-      if(item.type==="file" && item.url) window.open(item.url);
+      if(item.type==="photo" && (item.url||item.preview)){document.getElementById("modalImg").src=item.url||item.preview; document.getElementById("photoModal").style.display="flex";}
       if(item.type==="text") alert(item.text);
     };
     card.querySelector(".star").onclick=e=>{ e.stopPropagation(); item.favorite=!item.favorite; saveLocal(); renderLinks(); };
+
     if(manageMode){
       const actions=document.createElement("div"); actions.className="manage-actions";
       const edit=document.createElement("button"); edit.textContent="✏";
@@ -161,49 +149,70 @@ function renderLinks(){
     }
     box.appendChild(card);
   });
+
   if(linkSortable) linkSortable.destroy();
-  linkSortable=new Sortable(box,{animation:200,ghostClass:"sortable-ghost",disabled:uiHidden,onEnd:()=>{const ids=[...box.children].map(c=>c.dataset.id); data[currentCategory].sort((a,b)=>ids.indexOf(String(a.id))-ids.indexOf(String(b.id))); saveLocal();}});
+  linkSortable=new Sortable(box,{animation:200,ghostClass:"sortable-ghost"});
 }
 
-// 파일 추가
+// GitHub 업로드 함수
+function uploadFileToGitHub(file){
+  const token = getToken();
+  if(!token) return Promise.resolve(null);
+  return new Promise(resolve=>{
+    const reader = new FileReader();
+    reader.onload=e=>{
+      const base64=e.target.result.split(",")[1];
+      const fileName=Date.now()+"_"+file.name;
+      const url=`https://api.github.com/repos/${GITHUB.user}/${GITHUB.repo}/contents/${GITHUB.uploadPath}${fileName}`;
+      fetch(url,{
+        method:"PUT",
+        headers:{Authorization:`Bearer ${token}`,"Content-Type":"application/json"},
+        body:JSON.stringify({message:"upload photo", content:base64})
+      })
+      .then(res=>res.json())
+      .then(json=>{
+        if(json.content && json.content.path){
+          const branch="main";
+          const rawUrl=`https://raw.githubusercontent.com/${GITHUB.user}/${GITHUB.repo}/${branch}/${json.content.path}`;
+          resolve(rawUrl);
+        } else resolve(null);
+      }).catch(()=>resolve(null));
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
 function addLink(){
   if(!currentCategory) return alert("카테고리 선택");
-  const type=typeSelect.value; const title=titleInput.value; if(!title) return alert("제목");
-  if(type==="youtube"||type==="link"){data[currentCategory].push({id:Date.now(),title,url:urlInput.value,type,favorite:false});}
-  else if(type==="text"){data[currentCategory].push({id:Date.now(),title,text:textInput.value,type,favorite:false});}
-  else if(type==="file"){
-    const files=[...fileInput.files]; if(files.length===0){alert("파일 선택"); return;}
+  const type=typeSelect.value, title=titleInput.value; 
+  if(!title) return alert("제목");
+
+  if(type==="youtube"||type==="link"){data[currentCategory].push({id:Date.now(),title,url:urlInput.value,type,favorite:false}); saveLocal(); renderLinks();}
+  else if(type==="text"){data[currentCategory].push({id:Date.now(),title,text:textInput.value,type,favorite:false}); saveLocal(); renderLinks();}
+  else if(type==="photo"){
+    const files=[...fileInput.files]; if(files.length===0){alert("사진 선택"); return;}
     files.forEach(file=>{
       const tempId=Date.now()+Math.random();
-      data[currentCategory].push({id:tempId,title,fileName:file.name,type:"file",url:null,favorite:false});
-      uploadFileToGitHub(file,progress=>{
-        const idx=data[currentCategory].findIndex(d=>d.id===tempId);
-        if(idx>=0){
-          uploadFileToGitHub(file).then(downloadUrl=>{
-            if(downloadUrl){
-              data[currentCategory][idx].url = downloadUrl; 
-              renderLinks();
-            }
-          });
-        }
-      });
+      const reader=new FileReader();
+      reader.onload=e=>{
+        const preview=e.target.result;
+        const idx=data[currentCategory].push({id:tempId,title,type,preview,favorite:false,url:null})-1;
+        uploadFileToGitHub(file).then(url=>{
+          if(url){data[currentCategory][idx].url=url; saveLocal(); renderLinks();}
+        });
+      };
+      reader.readAsDataURL(file);
     });
   }
+
   titleInput.value=""; urlInput.value=""; textInput.value=""; fileInput.value="";
-  saveLocal(); renderLinks();
 }
 
 function toggleManage(){manageMode=!manageMode; renderCategories(); renderLinks();}
-function toggleUI(){uiHidden=!uiHidden; const header=document.getElementById("topHeader"); const input=document.getElementById("inputCard");
-if(uiHidden){header.style.display="none"; input.style.display="none"; if(linkSortable) linkSortable.option("disabled",true); const btn=document.createElement("button"); btn.id="restoreBtn"; btn.textContent="기능보기"; btn.style.position="fixed"; btn.style.top="20px"; btn.style.right="20px"; btn.style.zIndex="9999"; btn.onclick=toggleUI; document.body.appendChild(btn);}
-else{header.style.display="flex"; input.style.display="block"; if(linkSortable) linkSortable.option("disabled",false); const btn=document.getElementById("restoreBtn"); if(btn) btn.remove();}}
-function showGallery(){galleryMode=!galleryMode; renderLinks();}
 function downloadBackup(){const blob=new Blob([JSON.stringify(data,null,2)],{type:"application/json"}); const a=document.createElement("a"); a.href=URL.createObjectURL(blob); a.download="linkmanager_backup.json"; a.click();}
 function restoreBackup(){const input=document.createElement("input"); input.type="file"; input.onchange=e=>{const reader=new FileReader(); reader.onload=x=>{data=JSON.parse(x.target.result); saveLocal(); renderCategories(); renderLinks();}; reader.readAsText(e.target.files[0]);}; input.click();}
 function getToken(){let t=localStorage.getItem("ghToken"); if(!t){t=prompt("GitHub Token"); if(t) localStorage.setItem("ghToken",t);} return t;}
-
 async function syncToGit(){const token=getToken(); if(!token) return; const url=`https://api.github.com/repos/${GITHUB.user}/${GITHUB.repo}/contents/${GITHUB.dataPath}`; let sha=null; const r=await fetch(url,{headers:{Authorization:`Bearer ${token}`}}); if(r.ok){const f=await r.json(); sha=f.sha;} await fetch(url,{method:"PUT",headers:{Authorization:`Bearer ${token}`,"Content-Type":"application/json"},body:JSON.stringify({message:"update data",content:btoa(unescape(encodeURIComponent(JSON.stringify(data,null,2)))),sha})}); alert("업로드 완료");}
-
 async function syncFromGit(){const token=getToken(); if(!token) return; const url=`https://api.github.com/repos/${GITHUB.user}/${GITHUB.repo}/contents/${GITHUB.dataPath}`; const r=await fetch(url,{headers:{Authorization:`Bearer ${token}`}}); if(!r.ok) return alert("파일 없음"); const f=await r.json(); data=JSON.parse(decodeURIComponent(escape(atob(f.content)))); saveLocal(); renderCategories(); renderLinks(); alert("동기화 완료");}
 
 loadLocal(); renderCategories(); renderLinks();
