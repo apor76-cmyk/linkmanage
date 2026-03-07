@@ -139,6 +139,17 @@ font-size:13px;
 font-weight:600;
 }
 
+/* 타입별 제목 색상 */
+.title-youtube{color:#2563eb;}
+.title-link{color:#dc2626;}
+.title-photo{color:#059669;}
+.title-text{color:#7c3aed;}
+
+/* 다크모드 색상 */
+.dark .title-youtube{color:#60a5fa;}
+.dark .title-link{color:#f87171;}
+.dark .title-photo{color:#34d399;}
+.dark .title-text{color:#a78bfa;}
 .star{
 cursor:pointer;
 font-size:18px;
@@ -253,6 +264,76 @@ white-space: pre-wrap;
 </div>
 
 <script>
+async function encryptText(text,password){
+const enc=new TextEncoder()
+const keyMaterial=await crypto.subtle.importKey(
+"raw",enc.encode(password),"PBKDF2",false,["deriveKey"]
+)
+
+const key=await crypto.subtle.deriveKey(
+{
+name:"PBKDF2",
+salt:enc.encode("linkmanager"),
+iterations:100000,
+hash:"SHA-256"
+},
+keyMaterial,
+{name:"AES-GCM",length:256},
+false,
+["encrypt"]
+)
+
+const iv=crypto.getRandomValues(new Uint8Array(12))
+
+const encrypted=await crypto.subtle.encrypt(
+{name:"AES-GCM",iv},
+key,
+enc.encode(text)
+)
+
+return btoa(JSON.stringify({
+iv:Array.from(iv),
+data:Array.from(new Uint8Array(encrypted))
+}))
+}
+
+async function decryptText(cipher,password){
+
+try{
+
+const enc=new TextEncoder()
+const obj=JSON.parse(atob(cipher))
+
+const keyMaterial=await crypto.subtle.importKey(
+"raw",enc.encode(password),"PBKDF2",false,["deriveKey"]
+)
+
+const key=await crypto.subtle.deriveKey(
+{
+name:"PBKDF2",
+salt:enc.encode("linkmanager"),
+iterations:100000,
+hash:"SHA-256"
+},
+keyMaterial,
+{name:"AES-GCM",length:256},
+false,
+["decrypt"]
+)
+
+const decrypted=await crypto.subtle.decrypt(
+{name:"AES-GCM",iv:new Uint8Array(obj.iv)},
+key,
+new Uint8Array(obj.data)
+)
+
+return new TextDecoder().decode(decrypted)
+
+}catch{
+return null
+}
+
+}
 const GITHUB={user:"apor76-cmyk",repo:"data",dataPath:"linkmanager.json"}
 let data={Home:[]}, currentCategory="Home", manageMode=false, sortable, favSortable
 
@@ -307,8 +388,27 @@ wrap.appendChild(edit); wrap.appendChild(del)
 }
 bar.appendChild(wrap)
 })
-}
 
+/* 카테고리 드래그 정렬 */
+if(window.categorySortable) window.categorySortable.destroy()
+
+window.categorySortable = new Sortable(bar,{
+animation:200,
+disabled: document.getElementById("topbar").style.display==="none",
+onEnd:function(evt){
+const newOrder=[...bar.children].map(el=>el.querySelector(".category-btn").innerText)
+const newData={}
+newOrder.forEach(name=>{
+newData[name]=data[name]
+})
+data=newData
+currentCategory=newOrder[0]
+save()
+renderCategories()
+renderLinks()
+}
+})
+}
 function renderLinks(){
 const box=document.getElementById("linkList")
 const favBox=document.getElementById("favList")
@@ -322,19 +422,36 @@ card.className="link-card"
 if(item.favorite) card.classList.add("favorite")
 let thumb=""
 if(item.type==="youtube"){const id=getYoutubeId(item.url); thumb=`<div class="thumb"><img src="https://img.youtube.com/vi/${id}/mqdefault.jpg"></div>`}
-else if(item.type==="link"){let icon="🌐"; try{const domain=new URL(item.url).hostname; icon=`<img src="https://www.google.com/s2/favicons?sz=64&domain=${domain}">`}catch{}; thumb=`<div class="thumb">${icon}</div>`}
+else if(item.type==="link"){
+let icon="🌐"
+if(item.icon){
+icon=`<img src="${item.icon}" style="width:100%;height:100%;object-fit:cover">`}else{
+try{
+const domain=new URL(item.url).hostname
+icon=`<img src="https://www.google.com/s2/favicons?sz=64&domain=${domain}">`
+}catch{}
+}
+thumb=`<div class="thumb">${icon}</div>`
+}
 else if(item.type==="photo"){thumb=`<div class="thumb"><img src="${item.url}" onclick="showModal('${item.url}')"></div>`}
 else if(item.type==="text"){
-const preview=item.text ? (item.text.length>150 ? item.text.slice(0,150)+"..." : item.text) : ""
+let preview=""
+
+if(item.encrypted){
+preview="🔒 암호화된 메모"
+}else{
+preview=item.text ? (item.text.length>150 ? item.text.slice(0,150)+"..." : item.text) : ""
+}
+
 thumb=`<div class="thumb" style="
     display:flex;
     align-items:center;
     justify-content:flex-start;
     padding:8px;
     text-align:left;
-    background:#f0f0f0;
+    background:var(--card);
     font-size:12px;
-    color:#333;
+    color:var(--text);
     overflow:hidden;
     white-space: pre-wrap;
     word-wrap: break-word;
@@ -345,15 +462,33 @@ thumb=`<div class="thumb" style="
 card.innerHTML=`
 ${thumb}
 <div class="link-body">
-<div class="link-title">${item.title}</div>
+<div class="link-title title-${item.type} ${item.encrypted?"🔒":""}">${item.title}</div>
 <div><span class="star ${item.favorite?'active':''}">★</span></div>
 </div>`
-card.onclick=()=>{
+card.onclick=async ()=>{
 if(item.type==="link"||item.type==="youtube") window.open(item.url,"_blank")
 if(item.type==="text"){
 const textModal=document.getElementById("textModal")
 document.getElementById("textTitle").innerText=item.title
-document.getElementById("textBody").innerText=item.text
+let content=item.text
+
+if(item.encrypted){
+
+const pw=prompt("비밀번호 입력")
+if(!pw) return
+
+const decrypted=await decryptText(item.text,pw)
+
+if(!decrypted){
+alert("비밀번호 틀림")
+return
+}
+
+content=decrypted
+
+}
+
+document.getElementById("textBody").innerText=content
 // 다크모드에 따라 배경/글자색 적용
 if(document.body.classList.contains("dark")){
 textModal.querySelector(".modalBox").style.background="#1e293b"
@@ -371,7 +506,26 @@ const actions=document.createElement("div"); actions.className="manage-actions"
 const edit=document.createElement("button"); edit.textContent="✏"; edit.onclick=e=>{
 e.stopPropagation()
 const t=prompt("제목",item.title); if(t) item.title=t
-if(item.type==="link"||item.type==="youtube"){const u=prompt("URL",item.url); if(u) item.url=u}
+if(item.type==="link"||item.type==="youtube"){
+const u=prompt("URL",item.url)
+if(u) item.url=u
+
+/* 아이콘 이미지 업로드 */
+const input=document.createElement("input")
+input.type="file"
+input.accept="image/*"
+
+input.onchange=async e=>{
+const file=e.target.files[0]
+if(!file) return
+const img=await compressImage(file)
+item.icon=img
+save()
+renderLinks()
+}
+
+input.click()
+}
 if(item.type==="text"){
     const modal=document.createElement("div")
     modal.style.position="fixed"; modal.style.top="0"; modal.style.left="0"; modal.style.width="100%"; modal.style.height="100%"
@@ -400,7 +554,22 @@ favSortable=new Sortable(favBox,{animation:200,disabled: document.getElementById
 }
 
 function showModal(src){document.getElementById("modalImg").src=src; document.getElementById("photoModal").style.display="flex"}
-async function compressImage(file){return new Promise(resolve=>{const img=new Image(); const reader=new FileReader(); reader.onload=e=>{img.src=e.target.result; img.onload=()=>{const canvas=document.createElement("canvas"); const ctx=canvas.getContext("2d"); const max=1600; let w=img.width; let h=img.height; if(w>max){h*=max/w; w=max} canvas.width=w; canvas.height=h; ctx.drawImage(img,0,0,w,h); resolve(canvas.toDataURL("image/jpeg",0.75))}}; reader.readAsDataURL(file)})}
+async function compressImage(file){return new Promise(resolve=>{const img=new Image(); const reader=new FileReader(); reader.onload=e=>{img.src=e.target.result; img.onload=()=>{const canvas=document.createElement("canvas"); const ctx=canvas.getContext("2d"); 
+const max=256;
+let w=img.width;
+let h=img.height;
+
+if(w>max || h>max){
+const ratio=Math.min(max/w,max/h)
+w=w*ratio
+h=h*ratio
+}
+
+canvas.width=w;
+canvas.height=h;
+ctx.drawImage(img,0,0,w,h);
+
+resolve(canvas.toDataURL("image/jpeg",0.7))}}; reader.readAsDataURL(file)})}
 async function addLink(){
 const type=document.getElementById("type").value
 const title=document.getElementById("title").value
@@ -408,7 +577,42 @@ const url=document.getElementById("url").value
 const text=document.getElementById("text").value
 const file=document.getElementById("file").files[0]
 if(!title) return alert("제목 입력")
-if(type==="photo" && file){const img=await compressImage(file); data[currentCategory].push({id:Date.now(),title,type,url:img,favorite:false})}else{data[currentCategory].push({id:Date.now(),title,url,text,type,favorite:false})}
+if(type==="photo" && file){const img=await compressImage(file); data[currentCategory].push({id:Date.now(),title,type,url:img,favorite:false})}else{if(type==="text"){
+
+let encrypted=false
+let storedText=text
+
+if(confirm("텍스트를 암호화하시겠습니까?")){
+const pw=prompt("암호 입력")
+if(pw){
+storedText=await encryptText(text,pw)
+encrypted=true
+}
+}
+
+data[currentCategory].push({
+id:Date.now(),
+title,
+text:storedText,
+type,
+encrypted,
+favorite:false
+})
+
+}
+else{
+
+data[currentCategory].push({
+id:Date.now(),
+title,
+url,
+text,
+type,
+icon:null,
+favorite:false
+})
+
+}}
 save(); renderLinks()
 document.getElementById("title").value=""; document.getElementById("url").value=""; document.getElementById("text").value=""; document.getElementById("file").value=""
 }
